@@ -285,7 +285,7 @@ def prepare(fpath, max_time=np.inf, guess="rise"):
     if np.isfinite(max_time):
         mask = flat_data[0] <= max_time
         flat_data = tuple(arr[mask] for arr in flat_data)
-        
+
     ntime, naom, ntrig = flat_data[0], normalize(flat_data[1]), normalize(flat_data[2])
     trigger_threshold = 0.15
     trigger_crossings = np.where((ntrig[:-1] < trigger_threshold) & (ntrig[1:] >= trigger_threshold))[0]
@@ -310,13 +310,13 @@ def main():
     ntime, naom, ntrig, t_query, interp_aom, interp_trig, t_query_tc, interp_aom_tc, interp_trig_tc, popt = prepare(folderpath, max_time=3, guess="fall")
     plot_query_fit_full(ntime, naom, ntrig, t_query, interp_aom, interp_trig, t_query_tc, interp_aom_tc, interp_trig_tc, popt, smode="fall")
 
-    folderpath = Path(__file__).parent / "data" / "Mephisto"
-    ntime, naom, ntrig, t_query, interp_aom, interp_trig, t_query_tc, interp_aom_tc, interp_trig_tc, popt = prepare(folderpath, guess="fall")
-    plot_query_fit_full(ntime, naom, ntrig, t_query, interp_aom, interp_trig, t_query_tc, interp_aom_tc, interp_trig_tc, popt)
+    # folderpath = Path(__file__).parent / "data" / "Mephisto"
+    # ntime, naom, ntrig, t_query, interp_aom, interp_trig, t_query_tc, interp_aom_tc, interp_trig_tc, popt = prepare(folderpath, guess="fall")
+    # plot_query_fit_full(ntime, naom, ntrig, t_query, interp_aom, interp_trig, t_query_tc, interp_aom_tc, interp_trig_tc, popt)
 
-    folderpath = Path(__file__).parent / "data" / "TiSaph1"
-    ntime, naom, ntrig, t_query, interp_aom, interp_trig, t_query_tc, interp_aom_tc, interp_trig_tc, popt = prepare(folderpath, guess="rise")
-    plot_query_fit_full(ntime, naom, ntrig, t_query, interp_aom, interp_trig, t_query_tc, interp_aom_tc, interp_trig_tc, popt, smode="rise")
+    # folderpath = Path(__file__).parent / "data" / "TiSaph1"
+    # ntime, naom, ntrig, t_query, interp_aom, interp_trig, t_query_tc, interp_aom_tc, interp_trig_tc, popt = prepare(folderpath, guess="rise")
+    # plot_query_fit_full(ntime, naom, ntrig, t_query, interp_aom, interp_trig, t_query_tc, interp_aom_tc, interp_trig_tc, popt, smode="rise")
 
 if __name__ == "__main__":
     main()

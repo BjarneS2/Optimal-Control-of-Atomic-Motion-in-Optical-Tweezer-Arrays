@@ -61,12 +61,12 @@ def plot_survival(h5_path: str | Path, output_path: str | Path | None = None):
         sig_B   = f["protocol/sig_B"][:]      # type: ignore[index]
         best_dt = _s(f, "protocol/best_dt_us")
 
-        x  = f["trajectories/x_um"][:]        # type: ignore[index]
-        y  = f["trajectories/y_um"][:]        # type: ignore[index]
-        z  = f["trajectories/z_um"][:]        # type: ignore[index]
-        vx = f["trajectories/vx_ms"][:]       # type: ignore[index]
-        vy = f["trajectories/vy_ms"][:]       # type: ignore[index]
-        vz = f["trajectories/vz_ms"][:]       # type: ignore[index]
+        x  = f["trajectories/x_um"][:].T        # type: ignore[index]
+        y  = f["trajectories/y_um"][:].T        # type: ignore[index]
+        z  = f["trajectories/z_um"][:].T        # type: ignore[index]
+        vx = f["trajectories/vx_ms"][:].T       # type: ignore[index]
+        vy = f["trajectories/vy_ms"][:].T       # type: ignore[index]
+        vz = f["trajectories/vz_ms"][:].T       # type: ignore[index]
 
     N, T = x.shape
     in_A, in_B, lost = classify_atoms(x, y, z, vx, vy, vz,

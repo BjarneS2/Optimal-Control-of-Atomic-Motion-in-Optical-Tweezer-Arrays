@@ -27,11 +27,18 @@ Time offset intervals, to be checked; List of some e.g. +-5us interval.
 using Random, Printf, HDF5
 
 # ── Data paths (hardcoded, never change) ─────────────────────────────────────
-const PATH_TISAPH_OFF   = joinpath(@__DIR__, "data", "TiSaph1")
-const PATH_MEPHISTO_ON  = joinpath(@__DIR__, "data", "TiSaph")
-const PATH_TISAPH_ON    = joinpath(@__DIR__, "data", "TiSaph")
-const PATH_MEPHISTO_OFF = joinpath(@__DIR__, "data", "TiSaph1")
+const PATH_TISAPH_OFF   = joinpath(@__DIR__, "data", "TiSaph")
+const PATH_MEPHISTO_ON  = joinpath(@__DIR__, "data", "TiSaph1")
+const PATH_TISAPH_ON    = joinpath(@__DIR__, "data", "TiSaph1")
+const PATH_MEPHISTO_OFF = joinpath(@__DIR__, "data", "TiSaph")
 const INITIAL_TRAP = :TiSaph
+
+# ── Time cutoffs and edge modes per signal ────────────────────────────────────
+# TiSaph dataset has both rising and falling edges; cut at 3 μs to isolate fall.
+const TISAPH_OFF_CUTOFF  = 3.0;   const TISAPH_OFF_EDGE  = "fall"
+const TISAPH_ON_CUTOFF   = Inf;   const TISAPH_ON_EDGE   = "rise"
+const MEPHISTO_OFF_CUTOFF = Inf;  const MEPHISTO_OFF_EDGE = "fall"
+const MEPHISTO_ON_CUTOFF  = 3.0;  const MEPHISTO_ON_EDGE  = "rise"
 
 # ── Physical constants ────────────────────────────────────────────────────────
 const kB_SI = 1.380649e-23
@@ -227,11 +234,15 @@ function shift_time_series(time::AbstractVector, dt::Float64; mode="p")
 end
 
 function trig_time(time::AbstractVector, trigger::AbstractVector; threshold=0.3, mode="rise")
-    crossings = findall(i -> trigger[i] < threshold && trigger[i+1] >= threshold, 1:length(trigger)-1)
-    isempty(crossings) && error("No trigger crossing found.")
-    mode == "rise" && return time[crossings[1]]
-    mode == "fall" && return time[crossings[end]]
-    error("mode must be 'rise' or 'fall'")
+    if mode == "rise"
+        crossings = findall(i -> trigger[i] < threshold && trigger[i+1] >= threshold, 1:length(trigger)-1)
+    elseif mode == "fall"
+        crossings = findall(i -> trigger[i] >= threshold && trigger[i+1] < threshold, 1:length(trigger)-1)
+    else
+        error("mode must be 'rise' or 'fall'")
+    end
+    isempty(crossings) && error("No trigger crossing found (mode='$mode', threshold=$threshold).")
+    return time[crossings[1]]
 end
 
 function find_offset(time, signal, trigger; threshold=0.3, tmode="rise", smode="rise")
@@ -257,22 +268,26 @@ function fit_exponential(time::AbstractVector, signal::AbstractVector; guess::St
     return (A, (lo + hi) / 2, C)
 end
 
-function prepare(fpath::AbstractString)
+function prepare(fpath::AbstractString; max_time::Float64=Inf, edge::String="rise")
     ntime, naom, ntrig = flatten(load_folder(fpath))
+    if isfinite(max_time)
+        mask  = ntime .<= max_time
+        ntime = ntime[mask]; naom = naom[mask]; ntrig = ntrig[mask]
+    end
     naom  = normalize(naom)
     ntrig = normalize(ntrig)
     crossings = findall(i -> ntrig[i] < 0.15 && ntrig[i+1] >= 0.15, 1:length(ntrig)-1)
     isempty(crossings) && error("No trigger crossing in $fpath")
     k = crossings[1]
     ntime_tc, naom_tc, ntrig_tc = ntime[k:end], naom[k:end], ntrig[k:end]
-    popt = fit_exponential(ntime_tc, naom_tc; guess="rise")
+    popt = fit_exponential(ntime_tc, naom_tc; guess=edge)
     @printf("  %-28s  τ=%7.2f μs  A=%+.3f  C=%.3f\n", basename(fpath), popt[2], popt[1], popt[3])
     t_query    = collect(LinRange(ntime[1],    ntime[end],    5000))
     t_query_tc = collect(LinRange(ntime_tc[1], ntime_tc[end], 1000))
     return (ntime,    naom,    ntrig,
             t_query,    interp_data(ntime,    naom,    t_query),    interp_data(ntime,    ntrig,    t_query),
             t_query_tc, interp_data(ntime_tc, naom_tc, t_query_tc), interp_data(ntime_tc, ntrig_tc, t_query_tc),
-            popt)
+            popt, edge)
 end
 
 # ── Thermal sampling — full Boltzmann (Grimm, Weidemüller, Ovchinnikov 2000) ─
@@ -558,10 +573,10 @@ function main()
 
     println("\nLoading AOM datasets...")
     (_, _, _, tq_AO, ia_AO, _,
-     tqtc_AO, _, ittc_AO, _) = prepare(PATH_TISAPH_OFF)
+     tqtc_AO, _, ittc_AO, _, edge_AO) = prepare(PATH_TISAPH_OFF; max_time=TISAPH_OFF_CUTOFF, edge=TISAPH_OFF_EDGE)
 
     (_, _, _, tq_BO, ia_BO, _,
-     tqtc_BO, _, ittc_BO, _) = prepare(PATH_MEPHISTO_ON)
+     tqtc_BO, _, ittc_BO, _, edge_BO) = prepare(PATH_MEPHISTO_ON; max_time=MEPHISTO_ON_CUTOFF, edge=MEPHISTO_ON_EDGE)
 
     t0_AO = trig_time(tqtc_AO, ittc_AO; threshold=0.3, mode="rise")
     t0_BO = trig_time(tqtc_BO, ittc_BO; threshold=0.3, mode="rise")

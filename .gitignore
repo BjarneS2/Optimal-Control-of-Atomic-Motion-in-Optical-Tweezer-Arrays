@@ -32,3 +32,4 @@ images/
 data/
 .claude/
 .vscode/
+PouringSimulation/*.h5
