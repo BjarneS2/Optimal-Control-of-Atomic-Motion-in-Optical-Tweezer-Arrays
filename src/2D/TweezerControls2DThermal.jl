@@ -13,7 +13,7 @@ const N_EXT_CHECK = 100
 
 function optimize_controls2d_thermal(
     p::TweezerParams2D;
-    guess::Union{Nothing, InitialGuess2D}  = nothing,
+    guess::Union{Nothing, InitialG2D}  = nothing,
     bounds::Union{Nothing, ControlBounds2D} = nothing,
     silent::Bool               = true,
     max_iter::Int              = 4000,
@@ -29,11 +29,11 @@ function optimize_controls2d_thermal(
     scales = compute_scales2d_full(p; consts = consts)
     g      = scales.g_dimless
 
-    if p.final_trap_fraction > p.starting_trap_fraction
-        @warn "final_trap_fraction ($(p.final_trap_fraction)) > starting_trap_fraction ($(p.starting_trap_fraction)): final constraint is tighter than initial sampling — may be strongly infeasible"
+    if p.final_trap_fraction < p.starting_trap_fraction
+        @warn "final_trap_fraction ($(p.final_trap_fraction)) < starting_trap_fraction ($(p.starting_trap_fraction)): final constraint is tighter than initial sampling — may be strongly infeasible"
     end
-    if p.trap_fraction !== nothing && p.trap_fraction > p.starting_trap_fraction
-        @warn "trap_fraction ($(p.trap_fraction)) > starting_trap_fraction ($(p.starting_trap_fraction)): mid-transport constraint is tighter than initial sampling — likely infeasible"
+    if p.trap_fraction !== nothing && p.trap_fraction < p.starting_trap_fraction
+        @warn "trap_fraction ($(p.trap_fraction)) < starting_trap_fraction ($(p.starting_trap_fraction)): mid-transport constraint is tighter than initial sampling — likely infeasible"
     end
 
     ex, ez, L = transport_direction2d(p)
@@ -44,8 +44,13 @@ function optimize_controls2d_thermal(
     println("Sampling $n_samples thermal initial conditions (2D, only trapped)...")
     samples = [sample_initial_conditions2d(p; consts = consts, check_trapped = true)
                for _ in 1:n_samples]
-    println("  x range: [$(minimum(s.x for s in samples)), $(maximum(s.x for s in samples))]")
-    println("  z range: [$(minimum(s.z for s in samples)), $(maximum(s.z for s in samples))]")
+    println("  x range:  [$(minimum(s.x for s in samples)), $(maximum(s.x for s in samples))]")
+    println("  z range:  [$(minimum(s.z for s in samples)), $(maximum(s.z for s in samples))]")
+    println("  vx range: [$(minimum(s.vx for s in samples)), $(maximum(s.vx for s in samples))]")
+    println("  vz range: [$(minimum(s.vz for s in samples)), $(maximum(s.vz for s in samples))]")
+    let energies = [0.5*(s.vx^2 + s.vz^2) + potential2d(s.x, s.z, p.x_start, p.z_start, 0.0, p) for s in samples]
+        println("  E range:  [$(minimum(energies)), $(maximum(energies))]")
+    end
 
     n    = p.n
     w    = p.w

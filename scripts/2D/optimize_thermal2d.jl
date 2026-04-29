@@ -11,18 +11,22 @@ t0_SI  = consts.t0_us * 1e-6
 v0     = w0_SI / t0_SI
 E0     = m * v0^2
 
-T_tweezer = 287e-6
-T_atom    = 40e-6
+T_tweezer = 180e-6
+T_atom    = 4e-6
 
 U0_static  = kB * T_tweezer / E0
-U0_aux_max = 3.0 * U0_static
+UA_MAX = 280/180
+U0_aux_max = UA_MAX * U0_static
 
 lambda_static_nm  = consts.wavelength_static_nm
 lambda_dynamic_nm = consts.wavelength_dynamic_nm
-w_static_um  = 1.4
-w_dynamic_um = 1.2
+w_static_um  = 1.17
+w_dynamic_um = 1.17
 zR_static  = π * w_static_um^2  / (lambda_static_nm  * 1e-3)
 zR_dynamic = π * w_dynamic_um^2 / (lambda_dynamic_nm * 1e-3)
+
+# println(zR_dynamic, "\n", zR_static)
+# println(1/zR_dynamic, "\n", 1/zR_static)
 
 dist_um = 4.6
 x_stop  = dist_um
@@ -37,34 +41,62 @@ params = TweezerParams2D(
     z_start        = 0.0,
     x_stop         = x_stop,
     z_stop         = z_stop,
-    n              = 201,
+    n              = 1001,
     maxT           = 500.0,
     U0_static      = U0_static,
     U0_aux_max     = U0_aux_max,
     T_tweezer      = T_tweezer,
     T_atom         = T_atom,
-    lambda_jitter_pos = 0.1,
-    lambda_jitter_ua  = 0.5,
+    lambda_jitter_pos = 10,
+    lambda_jitter_ua  = 1,
     trap_fraction     = nothing,
-    final_trap_fraction    = 0.2,
     starting_trap_fraction = 0.2,
+    final_trap_fraction    = 0.8,
 )
+
+function convert_velocity_to_dimless(
+    v_physical::Float64, 
+    unit::String
+)
+    if unit == "m/s"
+        v_mps = v_physical
+    elseif unit == "um/us" || unit == "μm/μs"
+        v_mps = v_physical                      # μm/μs = m/s
+    elseif unit == "um/ms" || unit == "μm/ms"
+        v_mps = v_physical * 1e-3               # μm/ms = 1e-3 m/s
+    else
+        error("Unsupported velocity unit: $unit. Use 'm/s', 'um/us', or 'um/ms'")
+    end
+    return v_mps / v0
+end
+
+v_max = convert_velocity_to_dimless(10.0, "m/s") 
+println("Velocity limit: $v_max in dimensionless units. Used for both v_s and ux slew rate constraints.")
 
 bounds = ControlBounds2D(
     T_min_fraction  = 0.05,
     r_margin_w      = 0.5,
     z_margin        = 3.0 * zR_static,
-    v_x_max         = 0.5,
-    v_z_max         = 0.1,
+    v_x_max         = v_max,
+    v_z_max         = v_max,
     u_margin_w      = 1.0,
     ua_min          = 0.0,
-    ua_max          = 1.0,
-    v_u_max_per_w   = 3.0,
-    v_ua_max        = 10.0,
+    ua_max          = UA_MAX,
+    v_u_max_per_w   = v_max,
+    v_ua_max        = 26.0 * UA_MAX,
 )
 
+# load_from_file = nothing
+load_from_file = "C:/dev/GitHub/MasterThesisJulia/results/control_protocol_adv_2026-04-28_10-42-56.h5"
+
+if load_from_file !== nothing
+    guess = load_guess_from_1d_file(load_from_file, params)
+else
+    guess = sta_guess2d(params; frac_time = 0.5)
+end
+
 seed      = 37
-n_samples = 20
+n_samples = 25
 
 println("U0_static (dimless)  = $U0_static")
 println("U0_aux_max (dimless) = $U0_aux_max")
@@ -75,11 +107,12 @@ println("\nRunning 2D thermal optimal control with $n_samples samples (seed=$see
 
 result = optimize_controls2d_thermal(
     params;
+    guess                 = guess,
     bounds                = bounds,
     n_samples             = n_samples,
     seed                  = seed,
     max_iter              = 8000,
-    hessian_approximation = true,
+    hessian_approximation = false,
     print_level           = 5,
     consts                = consts,
 )

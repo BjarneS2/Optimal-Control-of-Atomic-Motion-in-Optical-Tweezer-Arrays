@@ -41,7 +41,7 @@ function linear_sweep_guess2d(p::TweezerParams2D; frac_time::Float64 = 0.5)
     vx = fill(L * ex / T, n)
     vz = fill(L * ez / T, n)
 
-    return InitialGuess2D(t, x, z, vx, vz, ux, uz, ua)
+    return InitialG2D(t, x, z, vx, vz, ux, uz, ua)
 end
 
 function sta_guess2d(p::TweezerParams2D; frac_time::Float64 = 0.5)
@@ -63,7 +63,7 @@ function sta_guess2d(p::TweezerParams2D; frac_time::Float64 = 0.5)
     vx = (ds_dphi ./ T) .* ex
     vz = (ds_dphi ./ T) .* ez
 
-    return InitialGuess2D(t, x, z, vx, vz, ux, uz, ua)
+    return InitialG2D(t, x, z, vx, vz, ux, uz, ua)
 end
 
 function load_guess_from_2d_file(filepath::String, p::TweezerParams2D;
@@ -96,7 +96,7 @@ function load_guess_from_2d_file(filepath::String, p::TweezerParams2D;
         T_new       = t_file[end] * time_scale
         t_new       = t_norm_new .* T_new
 
-        return InitialGuess2D(
+        return InitialG2D(
             t_new,
             _linterp(t_norm_old, x_file,  t_norm_new),
             _linterp(t_norm_old, z_file,  t_norm_new),
@@ -134,8 +134,8 @@ function load_guess_from_1d_file(filepath::String, p::TweezerParams2D;
         end
 
         attrs_f    = attrs(f)
-        xStart_1d  = haskey(attrs_f, "xStart") ? read(attrs_f, "xStart") : ux_1d[1]
-        xStop_1d   = haskey(attrs_f, "xStop")  ? read(attrs_f, "xStop")  : ux_1d[end]
+        xStart_1d  = haskey(attrs_f, "xStart") ? attrs_f["xStart"] : ux_1d[1]
+        xStop_1d   = haskey(attrs_f, "xStop")  ? attrs_f["xStop"]  : ux_1d[end]
         L_1d       = xStop_1d - xStart_1d
 
         s_ux  = (ux_1d .- xStart_1d) ./ L_1d
@@ -152,7 +152,7 @@ function load_guess_from_1d_file(filepath::String, p::TweezerParams2D;
         v_n    = _linterp(t_norm_old, v_scaled, t_norm_new)
         ua_n   = _linterp(t_norm_old, ua_file,  t_norm_new)
 
-        return InitialGuess2D(
+        return InitialG2D(
             t_new,
             p.x_start .+ s_x_n  .* L .* ex,
             p.z_start .+ s_x_n  .* L .* ez,

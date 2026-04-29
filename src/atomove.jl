@@ -11,6 +11,7 @@ include("3D/TweezerControls3DThermal.jl")
 include("2D/Types2D.jl")
 include("2D/Models2D.jl")
 include("2D/ThermalSampling2D.jl")
+include("2D/InitialGuess2D.jl")
 include("2D/TweezerControls2DThermal.jl")
 
 using .Types3D
@@ -24,6 +25,7 @@ using .TweezerControls3DThermal
 using .Types2D
 using .Models2D
 using .ThermalSampling2D
+using .InitialGuess2D
 using .TweezerControls2DThermal
 
 export TweezerParams3D, ControlProtocol3D, Trajectory3D, InitialG3D
@@ -38,11 +40,12 @@ export linear_sweep_guess, sta_guess, load_guess_from_file
 export optimize_controls3d_single
 export optimize_controls3d_thermal
 
-export TweezerParams2D, ControlProtocol2D, Trajectory2D, InitialGuess2D
+export TweezerParams2D, ControlProtocol2D, Trajectory2D, InitialG2D
 export ControlBounds2D, default_bounds2d
 export PhysicalConstants2D, default_constants2d
 export ThermalControlResult2D
 export transport_direction2d, transport_length2d
+export linear_sweep_guess2d, sta_guess2d, load_guess_from_2d_file, load_guess_from_1d_file
 export potential2d, forces2d
 export compute_scales2d_full, compute_scales2d, sample_initial_conditions2d, is_trapped2d
 export optimize_controls2d_thermal

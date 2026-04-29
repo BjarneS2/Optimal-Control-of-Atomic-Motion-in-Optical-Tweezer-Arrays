@@ -5,7 +5,7 @@ export PhysicalConstants2D, default_constants2d
 export transport_direction2d, transport_length2d
 export TweezerParams2D, ControlProtocol2D
 export ControlBounds2D, default_bounds2d
-export InitialGuess2D, Trajectory2D
+export InitialG2D, Trajectory2D
 
 Base.@kwdef struct PhysicalConstants2D
     kB::Float64        = 1.380649e-23
@@ -27,16 +27,6 @@ function compute_scales2d(consts::PhysicalConstants2D)
     g_dimless = consts.g_SI * t0_SI^2 / w0_SI
     return (w0_SI = w0_SI, t0_SI = t0_SI, v0 = v0, E0 = E0, g_dimless = g_dimless)
 end
-
-
-function transport_direction2d(p::TweezerParams2D)
-    dx = p.x_stop - p.x_start
-    dz = p.z_stop - p.z_start
-    L  = sqrt(dx^2 + dz^2)
-    return dx/L, dz/L, L
-end
-
-transport_length2d(p::TweezerParams2D) = sqrt((p.x_stop - p.x_start)^2 + (p.z_stop - p.z_start)^2)
 
 
 Base.@kwdef struct TweezerParams2D
@@ -79,6 +69,15 @@ Base.@kwdef struct ControlBounds2D
     v_ua_max::Float64        = 5.0
 end
 
+function transport_direction2d(p::TweezerParams2D)
+    dx = p.x_stop - p.x_start
+    dz = p.z_stop - p.z_start
+    L  = sqrt(dx^2 + dz^2)
+    return dx/L, dz/L, L
+end
+
+transport_length2d(p::TweezerParams2D) = sqrt((p.x_stop - p.x_start)^2 + (p.z_stop - p.z_start)^2)
+
 default_bounds2d(::TweezerParams2D) = ControlBounds2D()
 
 struct ControlProtocol2D
@@ -115,7 +114,7 @@ struct ThermalControlResult2D # basically protocols but for many atoms
     objective_value::Float64   
 end
 
-struct InitialGuess2D
+struct InitialG2D
     t::Vector{Float64}
     x::Vector{Float64}
     z::Vector{Float64}
