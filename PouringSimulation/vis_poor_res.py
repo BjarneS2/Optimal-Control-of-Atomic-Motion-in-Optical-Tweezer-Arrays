@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import h5py
 from pathlib import Path
 
@@ -145,7 +146,135 @@ def plot_survival(h5_path: str | Path, output_path: str | Path | None = None):
     plt.close(fig)
     print(f"Saved: {output_path}")
 
+def plot_potential_gif(h5_path: str | Path, output_path: str | Path | None = None,
+                       n_frames: int = 120, fps: int = 20):
+    h5_path = Path(h5_path)
+
+    def _s(f, key):
+        return float(f[key][()]) # type: ignore[index]
+
+    with h5py.File(h5_path, "r") as f:
+        w_A    = _s(f, "constants/w_TiSaph_um")
+        zR_A   = _s(f, "constants/zR_TiSaph_um")
+        U_A    = _s(f, "constants/U_TiSaph_dl")
+        w_B    = _s(f, "constants/w_Mephisto_um")
+        zR_B   = _s(f, "constants/zR_Mephisto_um")
+        U_B    = _s(f, "constants/U_Mephisto_dl")
+        U_A_uK = _s(f, "constants/U_TiSaph_uK")
+        U_B_uK = _s(f, "constants/U_Mephisto_uK")
+        T_uK   = _s(f, "constants/T_atom_uK")
+        trap_frac = _s(f, "constants/trap_frac")
+        best_dt   = _s(f, "protocol/best_dt_us")
+
+        t_us  = f["protocol/t_us"][:]   # type: ignore[index]
+        sig_A = f["protocol/sig_A"][:]  # type: ignore[index]
+        sig_B = f["protocol/sig_B"][:]  # type: ignore[index]
+
+        x  = f["trajectories/x_um"][:].T   # type: ignore[index]
+        y  = f["trajectories/y_um"][:].T   # type: ignore[index]
+        z  = f["trajectories/z_um"][:].T   # type: ignore[index]
+        vx = f["trajectories/vx_ms"][:].T  # type: ignore[index]
+        vy = f["trajectories/vy_ms"][:].T  # type: ignore[index]
+        vz = f["trajectories/vz_ms"][:].T  # type: ignore[index]
+
+    N, T = x.shape
+    in_A, in_B, lost = classify_atoms(x, y, z, vx, vy, vz,
+                                       w_A, zR_A, U_A,
+                                       w_B, zR_B, U_B,
+                                       trap_frac)
+    n_A    = in_A.sum(axis=0)
+    n_B    = in_B.sum(axis=0)
+    n_lost = lost.sum(axis=0)
+    base_B = n_A
+    base_L = n_A + n_B
+
+    x_um   = np.linspace(-30, 30, 800)
+    U_A_x  = _beam_u(x_um, 0.0, 0.0, w_A, zR_A, U_A)
+    U_B_x  = _beam_u(x_um, 0.0, 0.0, w_B, zR_B, U_B)
+    U_full = U_A + U_B
+    pot_ylim = (min(U_A_x.min(), U_B_x.min()) * 1.08, U_full * 0.06)
+
+    frame_idx = np.linspace(0, T - 1, n_frames, dtype=int)
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8),
+                                    gridspec_kw={"height_ratios": [2, 1]})
+
+    ax1.fill_between(t_us, 0,      n_A,              color=COLOR_A,    alpha=0.35, label="In trap A (TiSaph)")
+    ax1.fill_between(t_us, base_B, base_B + n_B,     color=COLOR_B,    alpha=0.35, label="In trap B (Mephisto)")
+    ax1.fill_between(t_us, base_L, base_L + n_lost,  color=COLOR_LOST, alpha=0.35, label="Lost")
+    ax1.plot(t_us, n_A,             color=COLOR_A,    lw=2)
+    ax1.plot(t_us, base_B + n_B,    color=COLOR_B,    lw=2)
+    ax1.plot(t_us, base_L + n_lost, color=COLOR_LOST, lw=2)
+    ax1.axhline(N, color="k", lw=1, ls=":", alpha=0.4, label=f"Total ({N})")
+    final_in_B = int(n_B[-1])
+    stats = (f"Final: {final_in_B}/{N} in trap B  ({100*final_in_B/N:.1f}%)\n"
+             f"Optimal Δt = {best_dt:+.2f} μs")
+    ax1.text(0.99, 0.97, stats, transform=ax1.transAxes,
+             ha="right", va="top", fontsize=9,
+             bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.85))
+    ax1.set_ylabel("Number of atoms", fontsize=11)
+    ax1.set_title(
+        f"Atom survival during pouring  "
+        f"(T={T_uK:.0f} μK,  U_A={U_A_uK:.0f} μK,  U_B={U_B_uK:.0f} μK)",
+        fontsize=12, fontweight="bold")
+    ax1.legend(loc="upper left", fontsize=9)
+    ax1.grid(alpha=0.25, ls=":")
+    ax1.set_ylim(0, N * 1.05)
+    ax1.set_xlim(t_us[0], t_us[-1])
+
+    vline1 = ax1.axvline(t_us[0], color="#aaaaaa", lw=1.5, ls="--", zorder=10)
+
+    ax2.set_xlabel("x (μm)", fontsize=11)
+    ax2.set_ylabel("Potential (dimensionless)", fontsize=11)
+    ax2.set_xlim(x_um[0], x_um[-1])
+    ax2.set_ylim(pot_ylim)
+    ax2.axhline(0, color="k", lw=0.8, alpha=0.4)
+    ax2.grid(alpha=0.25, ls=":")
+
+    line_A,  = ax2.plot([], [], color=COLOR_A,   lw=2.2, label="Trap A (TiSaph)")
+    line_B,  = ax2.plot([], [], color=COLOR_B,   lw=2.2, label="Trap B (Mephisto)")
+    line_AB, = ax2.plot([], [], color="#9b59b6", lw=2.2, ls="--", label="A + B (combined)")
+    fill_A  = ax2.fill_between(x_um, 0, 0, color=COLOR_A,   alpha=0.15)
+    fill_B  = ax2.fill_between(x_um, 0, 0, color=COLOR_B,   alpha=0.15)
+    fill_AB = ax2.fill_between(x_um, 0, 0, color="#9b59b6", alpha=0.10)
+    ax2.legend(fontsize=9, loc="lower center", ncol=3)
+
+    plt.tight_layout()
+
+    def _update(fi):
+        nonlocal fill_A, fill_B, fill_AB
+        i = frame_idx[fi]
+        vline1.set_xdata([t_us[i], t_us[i]])
+
+        ua = U_A_x * sig_A[i]
+        ub = U_B_x * sig_B[i]
+        uab = ua + ub
+
+        line_A.set_data(x_um, ua)
+        line_B.set_data(x_um, ub)
+        line_AB.set_data(x_um, uab)
+
+        fill_A.remove()
+        fill_A  = ax2.fill_between(x_um, ua,  0, color=COLOR_A,   alpha=0.15)
+        fill_B.remove()
+        fill_B  = ax2.fill_between(x_um, ub,  0, color=COLOR_B,   alpha=0.15)
+        fill_AB.remove()
+        fill_AB = ax2.fill_between(x_um, uab, 0, color="#9b59b6", alpha=0.10)
+
+        return line_A, line_B, line_AB, vline1
+
+    anim = animation.FuncAnimation(fig, _update, frames=n_frames,
+                                    interval=1000 // fps, blit=False)
+
+    if output_path is None:
+        output_path = h5_path.with_name(h5_path.stem + "_potential.gif")
+    output_path = Path(output_path)
+    anim.save(str(output_path), writer="pillow", fps=fps)
+    plt.close(fig)
+    print(f"Saved: {output_path}")
+
 
 if __name__ == "__main__":
     path = Path(__file__).parent / "results.h5"
     plot_survival(path)
+    plot_potential_gif(path)
